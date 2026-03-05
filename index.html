@@ -402,6 +402,7 @@
         window.setTableFilter = setTableFilter;
         window.removeTableFilter = removeTableFilter;
         window.clearAllTableFilters = clearAllTableFilters;
+        window.renderFedConsolidatedAndChart = renderFedConsolidatedAndChart;
 
         // ========================
         // HELPERS & PARSER
@@ -409,7 +410,13 @@
         const normalizeHeader = (h) => h ? h.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().replace(/\s+/g, ' ') : '';
         const findHeaderIndex = (headers, target) => { const normTarget = normalizeHeader(target); return headers.findIndex(h => normalizeHeader(h) === normTarget); };
         const isCellEmpty = (c) => c === null || c === undefined || String(c).trim() === '';
+        const formatUbigeo = (u) => u ? String(u).trim().padStart(10, '0') : '';
         const yieldToMain = () => new Promise(resolve => setTimeout(resolve, 0));
+
+        const getMeta = (row, headers) => CORE_HEADERS.map(h => {
+            let v = row[findHeaderIndex(headers, h)] || '';
+            return h === 'Ubigeo' ? formatUbigeo(v) : v;
+        });
 
         const asyncParseCSV = async (str, chunkSize = 1000) => {
             if (!str) return [];
@@ -531,12 +538,12 @@
                 APP_STATE.mefUbigeos = new Set();
                 if(mefData.length > 1) {
                     let uIdx = findHeaderIndex(mefData[0], 'Ubigeo'); if(uIdx === -1) uIdx = 0;
-                    mefData.slice(1).forEach(r => { if(r[uIdx]) APP_STATE.mefUbigeos.add(r[uIdx].trim()); });
+                    mefData.slice(1).forEach(r => { if(r[uIdx]) APP_STATE.mefUbigeos.add(formatUbigeo(r[uIdx])); });
                 }
                 APP_STATE.fedUbigeos = new Set();
                 if(fedData.length > 1) {
                     let uIdx = findHeaderIndex(fedData[0], 'Ubigeo'); if(uIdx === -1) uIdx = 0;
-                    fedData.slice(1).forEach(r => { if(r[uIdx]) APP_STATE.fedUbigeos.add(r[uIdx].trim()); });
+                    fedData.slice(1).forEach(r => { if(r[uIdx]) APP_STATE.fedUbigeos.add(formatUbigeo(r[uIdx])); });
                 }
                 
                 const redes = new Set();
@@ -693,7 +700,7 @@
                     if (redFilter !== 'Todos' && rowRed !== redFilter) return;
 
                     const id = row[idxId]; if(!id) return;
-                    if(!map[id]) map[id] = { meta: CORE_HEADERS.map(h => row[findHeaderIndex(headers, h)] || ''), totalSamples: 0, cleanSamples: 0, exceedances: [], ubicaciones: [] };
+                    if(!map[id]) map[id] = { meta: getMeta(row, headers), totalSamples: 0, cleanSamples: 0, exceedances: [], ubicaciones: [] };
                     
                     const hasData = checkComplianceSet(headers, currentSet?.A, row) || checkComplianceSet(headers, currentSet?.B, row);
                     if(hasData) {
@@ -717,7 +724,7 @@
                     const rowRed = row[findHeaderIndex(headers, 'Red de Salud')];
                     if (redFilter === 'Todos' || rowRed === redFilter) {
                         const id = row[idxId];
-                        if(id && !allSaps.has(id)) allSaps.set(id, CORE_HEADERS.map(h => row[findHeaderIndex(headers, h)] || ''));
+                        if(id && !allSaps.has(id)) allSaps.set(id, getMeta(row, headers));
                     }
                 });
 
@@ -734,7 +741,7 @@
                 if (redFilter !== 'Todos') dataRows = dataRows.filter(r => r[findHeaderIndex(headers, 'Red de Salud')] === redFilter);
                 finalHeaders = [...CORE_HEADERS, ...MONITOR_MONTHS]; const idxMes = findHeaderIndex(headers, 'Mes'); const map = {};
                 dataRows.forEach(row => {
-                    const id = row[idxId]; if(!id) return; if(!map[id]) map[id] = { meta: CORE_HEADERS.map(h => row[findHeaderIndex(headers, h)] || ''), months: Array(12).fill(0) };
+                    const id = row[idxId]; if(!id) return; if(!map[id]) map[id] = { meta: getMeta(row, headers), months: Array(12).fill(0) };
                     const mName = MONTHS_MAP[row[idxMes]?.toUpperCase()]; const mIdx = MONITOR_MONTHS.indexOf(mName);
                     if(mIdx !== -1) { const s = classifyMonitoringStatus(headers, row); if(s > map[id].months[mIdx]) map[id].months[mIdx] = s; }
                 });
@@ -745,7 +752,7 @@
                 finalHeaders = [...CORE_HEADERS, ...MONITOR_MONTHS]; const map = {}; const localIdxId = findHeaderIndex(localHeaders, 'Id. SAP');
                 localRows.forEach(row => {
                     const id = row[localIdxId] || row[findHeaderIndex(localHeaders, 'Nombre SAP')]; if(!id) return;
-                    if(!map[id]) map[id] = { meta: CORE_HEADERS.map(h => row[findHeaderIndex(localHeaders, h)] || ''), vals: Array(12).fill(0) };
+                    if(!map[id]) map[id] = { meta: getMeta(row, localHeaders), vals: Array(12).fill(0) };
                     MONITOR_MONTHS.forEach((m, i) => {
                         const idxInf = findHeaderIndex(localHeaders, `Informe ${m}`); const idxCar = findHeaderIndex(localHeaders, `Cargo ${m}`);
                         if (idxInf !== -1 && idxCar !== -1 && normalizeHeader(row[idxInf]) === 'aprobado' && normalizeHeader(row[idxCar]) === 'aprobado') map[id].vals[i]++; 
@@ -760,7 +767,7 @@
                 const map = {}; const localIdxId = findHeaderIndex(localHeaders, 'Id. SAP');
                 localRows.forEach(row => {
                     const id = row[localIdxId] || row[findHeaderIndex(localHeaders, 'Nombre SAP')]; if(!id) return;
-                    if(!map[id]) { map[id] = { meta: CORE_HEADERS.map(h => row[findHeaderIndex(localHeaders, h)] || ''), vals: [] }; if(subTab==='inspeccion') map[id].insp=0; if(subTab==='sanitaria') map[id].count=0; }
+                    if(!map[id]) { map[id] = { meta: getMeta(row, localHeaders), vals: [] }; if(subTab==='inspeccion') map[id].insp=0; if(subTab==='sanitaria') map[id].count=0; }
                     if (subTab === 'inspeccion') { if(classifyInspeccionStatus(localHeaders, row) === 1) map[id].insp++; }
                     else if (subTab === 'sanitaria') { if(!isCellEmpty(row[findHeaderIndex(localHeaders, 'Fecha de inspección')])) map[id].count++; }
                 });
@@ -944,14 +951,17 @@
         }
 
         // ========================
-        // LOGICA FED (NUEVO CON IND 1 e IND 2)
+        // LOGICA FED (ACTUALIZADA CON FILTROS Y TABS)
         // ========================
         function renderFedTabs() {
             const tabs = [
                 {id: 'ind1', label: 'Ind. 1 (Agua con Cloro y Turbiedad)'}, 
                 {id: 'ind2', label: 'Ind. 2 (Vigilancia del Agua)'}
             ];
-            document.getElementById('fed-tabs-container').innerHTML = tabs.map(t => `<button onclick="window.changeFedSubTab('${t.id}')" class="whitespace-nowrap px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${APP_STATE.fedActiveTab === t.id ? 'bg-amber-500 text-white shadow-md' : 'bg-white text-slate-500 hover:bg-amber-50 hover:text-amber-600 border border-slate-200'}">${t.label}</button>`).join('');
+            const container = document.getElementById('fed-tabs-container');
+            if (container) {
+                container.innerHTML = tabs.map(t => `<button onclick="window.changeFedSubTab('${t.id}')" class="whitespace-nowrap px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${APP_STATE.fedActiveTab === t.id ? 'bg-amber-500 text-white shadow-md' : 'bg-white text-slate-500 hover:bg-amber-50 hover:text-amber-600 border border-slate-200'}">${t.label}</button>`).join('');
+            }
         }
 
         function changeFedSubTab(tabId) { 
@@ -994,7 +1004,7 @@
             const headers2 = dataObj.main2[0] || []; const rows2 = dataObj.main2.slice(1);
             
             const initCCPP = (row, headers) => {
-                const ubi = row[findHeaderIndex(headers, 'Ubigeo')];
+                const ubi = formatUbigeo(row[findHeaderIndex(headers, 'Ubigeo')]);
                 const nom = row[findHeaderIndex(headers, 'Nombre CCPP')];
                 if (!ubi || !nom) return null;
                 const id = ubi + '_' + nom;
